@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 3.12)
+project(emu8051 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(NCURSES ncurses REQUIRED)
+
+add_subdirectory(libtrace)
+
+add_executable(emu
+        emu.c
+        core.c
+        disasm.c
+        logicboard.c
+        mainview.c
+        memeditor.c
+        opcodes.c
+        options.c
+        popups.c
+        emu8051.h
+        emulator.h
+        )
+
+#set_target_properties(emu PROPERTIES
+#        LINKER_LANGUAGE CXX)
+target_link_libraries(emu PRIVATE
+        trace
+        ${NCURSES_LIBRARIES}
+        )
+target_include_directories(emu PRIVATE libtrace/${LIBTRACE_SOURCE_DIR})

@@ -1,0 +1,3 @@
+[submodule "libtrace/bap-frames"]
+	path = libtrace/bap-frames
+	url = https://github.com/BinaryAnalysisPlatform/bap-frames.git
