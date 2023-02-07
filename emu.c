@@ -44,6 +44,7 @@
 #endif
 #include "emu8051.h"
 #include "emulator.h"
+#include "trace.h"
 
 unsigned char history[HISTORY_LINES * (128 + 64 + sizeof(int))];
 

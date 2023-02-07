@@ -19,10 +19,7 @@ add_executable(emu
         popups.c
         emu8051.h
         emulator.h
-        )
+        libtrace/trace.cpp libtrace/trace.h)
 
-target_link_libraries(emu PRIVATE
-        trace
-        ${NCURSES_LIBRARIES}
-        )
-target_include_directories(emu PRIVATE libtrace/${LIBTRACE_SOURCE_DIR})
+target_link_libraries(emu PRIVATE trace ${NCURSES_LIBRARIES})
+target_include_directories(emu PRIVATE libtrace)
