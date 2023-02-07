@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(emu8051 LANGUAGES CXX)
+project(emu8051)
 set(CMAKE_CXX_STANDARD 17)
 
 find_package(PkgConfig REQUIRED)
@@ -21,8 +21,6 @@ add_executable(emu
         emulator.h
         )
 
-#set_target_properties(emu PROPERTIES
-#        LINKER_LANGUAGE CXX)
 target_link_libraries(emu PRIVATE
         trace
         ${NCURSES_LIBRARIES}
