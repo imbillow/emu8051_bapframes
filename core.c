@@ -417,7 +417,7 @@ bool tick(struct em8051 *aCPU) {
 			// TODO: fix opcode size
 			build_frame.op_size = 3;
 			memcpy(build_frame.op,
-				(const void *)aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)],
+				(const void *)&aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)],
 				build_frame.op_size);
 			dump_operands(aCPU, &build_frame.pre);
 		}
