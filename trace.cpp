@@ -88,24 +88,6 @@ static void push_reg(operand_value_list *out, const char *name, uint16_t v, size
 }
 
 static void push_regs(operand_value_list *out, TraceRegs8051 *in, bool r, bool w, TraceRegs8051 *diff) {
-	// can't observe which registers were actually used, so we always dump all of them (except unchanged)
-	//	if (!diff || in->a != diff->a) {
-	//		push_reg(out, "a", in->a, 8, r, w);
-	//	}
-	//	if (!diff || in->x != diff->x) {
-	//		push_reg(out, "x", in->x, 8, r, w);
-	//	}
-	//	if (!diff || in->y != diff->y) {
-	//		push_reg(out, "y", in->y, 8, r, w);
-	//	}
-	//	if (!diff || in->sp != diff->sp) {
-	//		push_reg(out, "sp", in->sp, 8, r, w);
-	//	}
-	//	push_reg(out, "pc", in->pc, 16, r, w);
-	//	if (!diff || in->sr != diff->sr) {
-	//		push_reg(out, "sr", in->sr, 8, r, w);
-	//	}
-
 	push_reg(out, "pc", in->pc, 16, r, w);
 
 #define PUSH_SFR(name, reg_idx, bits) \

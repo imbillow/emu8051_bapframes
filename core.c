@@ -390,6 +390,28 @@ void dump_operands(struct em8051 *aCPU, TraceOperands8051 *aTrace) {
 	memcpy(aTrace->regs.GPRs, aCPU->mLowerData, sizeof(aCPU->mLowerData));
 }
 
+// clang-format off
+static const uint8_t opcode_size[256] = {
+	/* 0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f */
+/* 0x00 */ 1,   2,   3,   1,   1,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0x10 */ 3,   2,   3,   1,   1,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0x20 */ 3,   2,   1,   1,   2,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0x30 */ 3,   2,   1,   1,   2,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0x40 */ 2,   2,   2,   3,   2,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0x50 */ 2,   2,   2,   3,   2,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0x60 */ 2,   2,   2,   3,   2,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0x70 */ 2,   2,   2,   1,   2,   3,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,
+/* 0x80 */ 2,   2,   2,   1,   1,   3,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,
+/* 0x90 */ 3,   2,   2,   1,   2,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0xa0 */ 2,   2,   2,   1,   1,   1,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,
+/* 0xb0 */ 2,   2,   2,   1,   3,   3,   3,   3,   3,   3,   3,   3,   3,   3,   3,   3,
+/* 0xc0 */ 2,   2,   2,   1,   1,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0xd0 */ 2,   2,   2,   1,   1,   3,   1,   1,   2,   2,   2,   2,   2,   2,   2,   2,
+/* 0xe0 */ 1,   2,   1,   1,   1,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+/* 0xf0 */ 1,   2,   1,   1,   1,   2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+};
+// clang-format on
+
 bool tick(struct em8051 *aCPU) {
 	uint8_t v;
 	bool ticked = false;
@@ -414,11 +436,9 @@ bool tick(struct em8051 *aCPU) {
 
 	if (aCPU->mTickDelay == 0) {
 		if (trace_is_open()) {
-			// TODO: fix opcode size
-			build_frame.op_size = 3;
-			memcpy(build_frame.op,
-				(const void *)&aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)],
-				build_frame.op_size);
+			uint8_t opcode = aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)];
+			build_frame.op_size = opcode_size[opcode];
+			memcpy(build_frame.op, (const void *)&aCPU->mCodeMem[opcode], build_frame.op_size);
 			dump_operands(aCPU, &build_frame.pre);
 		}
 
