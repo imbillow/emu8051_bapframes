@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "emu8051.h"
+#include "trace.h"
 
 static void serial_tx(struct em8051 *aCPU) {
 	// Test if still something to send
@@ -383,6 +384,12 @@ void handle_interrupts(struct em8051 *aCPU) {
 	aCPU->int_sp[hi] = aCPU->mSFR[REG_SP];
 }
 
+void dump_operands(struct em8051 *aCPU, TraceOperands8051 *aTrace) {
+	aTrace->regs.pc = aCPU->mPC;
+	memcpy(aTrace->regs.SFRs, aCPU->mSFR, sizeof(aCPU->mSFR));
+	memcpy(aTrace->regs.GPRs, aCPU->mLowerData, sizeof(aCPU->mLowerData));
+}
+
 bool tick(struct em8051 *aCPU) {
 	uint8_t v;
 	bool ticked = false;
@@ -406,6 +413,15 @@ bool tick(struct em8051 *aCPU) {
 	}
 
 	if (aCPU->mTickDelay == 0) {
+		if (trace_is_open()) {
+			// TODO: fix opcode size
+			build_frame.op_size = 3;
+			memcpy(build_frame.op,
+				(const void *)aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)],
+				build_frame.op_size);
+			dump_operands(aCPU, &build_frame.pre);
+		}
+
 		// IDL activate the idle mode to save power
 		bool is_idle = (aCPU->mSFR[REG_PCON]) & 0x01;
 		if (is_idle) {
@@ -420,6 +436,11 @@ bool tick(struct em8051 *aCPU) {
 		v &= 0xf;
 		v = (0x6996 >> v) & 1;
 		aCPU->mSFR[REG_PSW] = (aCPU->mSFR[REG_PSW] & ~PSWMASK_P) | (v * PSWMASK_P);
+
+		if (trace_is_open()) {
+			dump_operands(aCPU, &build_frame.post);
+			trace_push(&build_frame);
+		}
 	}
 
 	timer_tick(aCPU);
@@ -442,6 +463,7 @@ uint8_t decode(struct em8051 *aCPU, uint16_t aPosition, char *aBuffer) {
 }
 
 void disasm_setptrs(struct em8051 *aCPU);
+
 void op_setptrs(struct em8051 *aCPU);
 
 void reset(struct em8051 *aCPU, bool aWipe) {

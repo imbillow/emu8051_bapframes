@@ -27,8 +27,6 @@ add_library(trace
         ${PROTO_SRCS}
         ${PROTO_HDRS}
         "${CMAKE_CURRENT_BINARY_DIR}/config.h"
-        trace.cpp
-        trace.h
         )
 target_include_directories(trace
         PUBLIC "${LIBTRACE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" ${Protobuf_INCLUDE_DIRS})

@@ -30,18 +30,24 @@
 #include <windows.h>
 #undef MOUSE_MOVED
 #else
+
 #include <sys/time.h>
 #include <unistd.h>
+
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #ifdef __linux__
+
 #include <curses.h>
+
 #else
 #include "curses.h"
 #endif
+
 #include "emu8051.h"
 #include "emulator.h"
 #include "trace.h"
@@ -264,6 +270,7 @@ int main(int parc, char **pars) {
 
 	reset(&emu, 1);
 
+	char *bap_frames_filename = NULL;
 	if (parc > 1) {
 		for (i = 1; i < parc; i++) {
 			if (pars[i][0] == '-' || pars[i][0] == '/') {
@@ -304,6 +311,9 @@ int main(int parc, char **pars) {
 					opt_clock_hz = atoi(pars[i] + 7);
 					if (opt_clock_hz <= 0)
 						opt_clock_hz = 1;
+				}
+				if (strncmp("bap_frames=", pars[i] + 1, 11) == 0) {
+					bap_frames_filename = pars[i] + 12;
 				} else {
 					printf("Help:\n\n"
 					       "emu8051 [options] [filename]\n\n"
@@ -318,7 +328,8 @@ int main(int parc, char **pars) {
 					       "-noexc_invalid_op -noiop      Disable invalid opcode exception\n"
 					       "-iolowlow         If out pin is low, hi input from same pin is low\n"
 					       "-iolowrand        If out pin is low, hi input from same pin is random\n"
-					       "-clock=value      Set clock speed, in Hz\n");
+					       "-clock=value      Set clock speed, in Hz\n"
+					       "-bap_frames=filename  Save BAP frames to file\n");
 					return -1;
 				}
 			} else {
@@ -405,9 +416,17 @@ int main(int parc, char **pars) {
 			if (runmode) {
 				runmode = 0;
 				setSpeed(speed, runmode);
+
+				if (trace_is_open()) {
+					trace_close();
+				}
 			} else {
 				runmode = 1;
 				setSpeed(speed, runmode);
+
+				if (!trace_is_open() && bap_frames_filename) {
+					trace_open(bap_frames_filename);
+				}
 			}
 			break;
 #ifdef __PDCURSES__
