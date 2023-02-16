@@ -436,9 +436,8 @@ bool tick(struct em8051 *aCPU) {
 
 	if (aCPU->mTickDelay == 0) {
 		if (trace_is_open()) {
-			uint8_t opcode = aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)];
-			build_frame.op_size = opcode_size[opcode];
-			memcpy(build_frame.op, (const void *)&aCPU->mCodeMem[opcode], build_frame.op_size);
+			build_frame.op_size = opcode_size[aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)]];
+			memcpy(build_frame.op, (const void *)&aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)], build_frame.op_size);
 			dump_operands(aCPU, &build_frame.pre);
 		}
 

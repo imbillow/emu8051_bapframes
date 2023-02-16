@@ -48,7 +48,7 @@ extern "C" int trace_open(const char *filename) {
 
 	try {
 		writer.reset(new SerializedTrace::TraceContainerWriter(filename, meta, frame_arch_8051, 0));
-	} catch (std::exception e) {
+	} catch (std::exception &e) {
 		eprintf("open failed: %s\n", e.what());
 		return 0;
 	}
@@ -88,7 +88,9 @@ static void push_reg(operand_value_list *out, const char *name, uint16_t v, size
 }
 
 static void push_regs(operand_value_list *out, TraceRegs8051 *in, bool r, bool w, TraceRegs8051 *diff) {
-	push_reg(out, "pc", in->pc, 16, r, w);
+	if (!diff || in->pc != diff->pc) {
+		push_reg(out, "pc", in->pc, 16, r, w);
+	}
 
 #define PUSH_SFR(name, reg_idx, bits) \
 	do { \
@@ -116,7 +118,7 @@ static void push_regs(operand_value_list *out, TraceRegs8051 *in, bool r, bool w
 	}
 
 	PUSH_SFR("sp", REG_SP, 8);
-	PUSH_SFR("acc", REG_ACC, 8);
+	PUSH_SFR("a", REG_ACC, 8);
 	PUSH_SFR("b", REG_B, 8);
 
 	PUSH_SFR("p0", REG_P0, 8);
