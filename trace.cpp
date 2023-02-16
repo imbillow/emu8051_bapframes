@@ -47,7 +47,7 @@ extern "C" int trace_open(const char *filename) {
 	meta.set_time(0.0);
 
 	try {
-		writer.reset(new SerializedTrace::TraceContainerWriter(filename, meta, frame_arch_6502, 0));
+		writer.reset(new SerializedTrace::TraceContainerWriter(filename, meta, frame_arch_8051, 0));
 	} catch (std::exception e) {
 		eprintf("open failed: %s\n", e.what());
 		return 0;
