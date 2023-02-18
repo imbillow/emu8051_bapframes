@@ -385,9 +385,9 @@ void handle_interrupts(struct em8051 *aCPU) {
 }
 
 void dump_operands(struct em8051 *aCPU, TraceOperands8051 *aTrace) {
-	aTrace->regs.pc = aCPU->mPC;
-	memcpy(aTrace->regs.SFRs, aCPU->mSFR, sizeof(aCPU->mSFR));
-	memcpy(aTrace->regs.GPRs, aCPU->mLowerData, sizeof(aCPU->mLowerData));
+	aTrace->pc = aCPU->mPC;
+	memcpy(aTrace->SFRs, aCPU->mSFR, sizeof(aCPU->mSFR));
+	memcpy(aTrace->lower, aCPU->mLowerData, sizeof(aCPU->mLowerData));
 }
 
 // clang-format off

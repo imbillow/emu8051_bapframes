@@ -87,7 +87,7 @@ static void push_reg(operand_value_list *out, const char *name, uint16_t v, size
 	i->set_value(std::string((const char *)va, bits / 8));
 }
 
-static void push_regs(operand_value_list *out, TraceRegs8051 *in, bool r, bool w, TraceRegs8051 *diff) {
+static void push_regs(operand_value_list *out, TraceOperands8051 *in, bool r, bool w, TraceOperands8051 *diff) {
 	if (!diff || in->pc != diff->pc) {
 		push_reg(out, "pc", in->pc, 16, r, w);
 	}
@@ -132,11 +132,11 @@ static void push_regs(operand_value_list *out, TraceRegs8051 *in, bool r, bool w
 
 #define PUSH_GPR(name, reg_idx, bits) \
 	do { \
-		if (!diff || in->GPRs[reg_idx] != diff->GPRs[reg_idx]) { \
-			push_reg(out, name, in->GPRs[reg_idx], bits, r, w); \
+		if (!diff || in->lower[reg_idx] != diff->lower[reg_idx]) { \
+			push_reg(out, name, in->lower[reg_idx], bits, r, w); \
 		} \
 	} while (0)
-	// 8 General Purpose Registers (GPRs).
+	// 8 General Purpose Registers (lower).
 	uint8_t bank = (in->SFRs[REG_PSW] & 0x18) >> 3;
 	PUSH_GPR("r0", 0x8 * bank, 8);
 	PUSH_GPR("r1", 0x8 * bank + 1, 8);
@@ -148,30 +148,78 @@ static void push_regs(operand_value_list *out, TraceRegs8051 *in, bool r, bool w
 	PUSH_GPR("r7", 0x8 * bank + 7, 8);
 }
 
-static void push_mems(operand_value_list *out, TraceMem8051 *mems, size_t count, bool r, bool w) {
-	for (size_t idx = 0; idx < count; idx++) {
-		TraceMem8051 *m = &mems[idx];
+static const std::set<uint8_t> regs = {
+	REG_ACC,
+	REG_B,
+	REG_PSW,
+	REG_SP,
+	REG_DPL,
+	REG_DPH,
+	REG_P0,
+	REG_P1,
+	REG_P2,
+	REG_P3,
+	REG_IP,
+	REG_IE,
+	REG_TMOD,
+	REG_TCON,
+	REG_TH0,
+	REG_TL0,
+	REG_TH1,
+	REG_TL1,
+	REG_SCON,
+	REG_SBUF,
+	REG_PCON,
+};
 
-		mem_operand *mo = new mem_operand();
-		mo->set_address(m->addr);
-		operand_info_specific *s = new operand_info_specific();
-		s->set_allocated_mem_operand(mo);
-
-		operand_usage *u = new operand_usage();
-		u->set_read(r);
-		u->set_written(w);
-		u->set_index(false);
-		u->set_base(false);
-
-		taint_info *ti = new taint_info();
-
-		operand_info *i = out->add_elem();
-		i->set_allocated_operand_info_specific(s);
-		i->set_bit_length(8);
-		i->set_allocated_operand_usage(u);
-		i->set_allocated_taint_info(ti);
-		i->set_value(std::string((const char *)&m->val, 1));
-	}
+static void push_mems(operand_value_list *out, TraceOperands8051 *op, size_t count, bool r, bool w) {
+//	for (size_t idx = 0x20; idx <= 0x7f; idx++) {
+//		auto *mo = new mem_operand();
+//		mo->set_address(idx);
+//		auto *s = new operand_info_specific();
+//		s->set_allocated_mem_operand(mo);
+//
+//		auto *u = new operand_usage();
+//		u->set_read(r);
+//		u->set_written(w);
+//		u->set_index(false);
+//		u->set_base(false);
+//
+//		taint_info *ti = new taint_info();
+//
+//		operand_info *i = out->add_elem();
+//		i->set_allocated_operand_info_specific(s);
+//		i->set_bit_length(8);
+//		i->set_allocated_operand_usage(u);
+//		i->set_allocated_taint_info(ti);
+//
+//		i->set_value(std::string((const char *)&op->lower[idx], 1));
+//	}
+//	for (size_t idx = 0x80; idx <= 0xff; idx++) {
+//		if (regs.find(idx - 0x80) != regs.end()) {
+//			continue;
+//		}
+//		auto *mo = new mem_operand();
+//		mo->set_address(idx);
+//		auto *s = new operand_info_specific();
+//		s->set_allocated_mem_operand(mo);
+//
+//		auto *u = new operand_usage();
+//		u->set_read(r);
+//		u->set_written(w);
+//		u->set_index(false);
+//		u->set_base(false);
+//
+//		taint_info *ti = new taint_info();
+//
+//		operand_info *i = out->add_elem();
+//		i->set_allocated_operand_info_specific(s);
+//		i->set_bit_length(8);
+//		i->set_allocated_operand_usage(u);
+//		i->set_allocated_taint_info(ti);
+//
+//		i->set_value(std::string((const char *)&op->SFRs[idx], 1));
+//	}
 }
 
 extern "C" void trace_push(TraceFrame8051 *tf) {
@@ -180,15 +228,15 @@ extern "C" void trace_push(TraceFrame8051 *tf) {
 	}
 
 	operand_value_list *pre = new operand_value_list();
-	push_regs(pre, &tf->pre.regs, true, false, nullptr);
-	push_mems(pre, tf->pre.mems, tf->pre.mems_count, true, false);
+	push_regs(pre, &tf->pre, true, false, nullptr);
+	push_mems(pre, &tf->pre, 0, true, false);
 
 	operand_value_list *post = new operand_value_list();
-	push_regs(post, &tf->post.regs, false, true, &tf->pre.regs);
-	push_mems(post, tf->post.mems, tf->post.mems_count, false, true);
+	push_regs(post, &tf->post, false, true, &tf->pre);
+	push_mems(post, &tf->post, 0, false, true);
 
 	std_frame *sf = new std_frame();
-	sf->set_address(tf->pre.regs.pc);
+	sf->set_address(tf->pre.pc);
 	sf->set_thread_id(0);
 	sf->set_rawbytes(std::string((const char *)tf->op, tf->op_size));
 	sf->set_allocated_operand_pre_list(pre);
