@@ -172,54 +172,30 @@ static const std::set<uint8_t> regs = {
 	REG_PCON,
 };
 
-static void push_mems(operand_value_list *out, TraceOperands8051 *op, size_t count, bool r, bool w) {
-//	for (size_t idx = 0x20; idx <= 0x7f; idx++) {
-//		auto *mo = new mem_operand();
-//		mo->set_address(idx);
-//		auto *s = new operand_info_specific();
-//		s->set_allocated_mem_operand(mo);
-//
-//		auto *u = new operand_usage();
-//		u->set_read(r);
-//		u->set_written(w);
-//		u->set_index(false);
-//		u->set_base(false);
-//
-//		taint_info *ti = new taint_info();
-//
-//		operand_info *i = out->add_elem();
-//		i->set_allocated_operand_info_specific(s);
-//		i->set_bit_length(8);
-//		i->set_allocated_operand_usage(u);
-//		i->set_allocated_taint_info(ti);
-//
-//		i->set_value(std::string((const char *)&op->lower[idx], 1));
-//	}
-//	for (size_t idx = 0x80; idx <= 0xff; idx++) {
-//		if (regs.find(idx - 0x80) != regs.end()) {
-//			continue;
-//		}
-//		auto *mo = new mem_operand();
-//		mo->set_address(idx);
-//		auto *s = new operand_info_specific();
-//		s->set_allocated_mem_operand(mo);
-//
-//		auto *u = new operand_usage();
-//		u->set_read(r);
-//		u->set_written(w);
-//		u->set_index(false);
-//		u->set_base(false);
-//
-//		taint_info *ti = new taint_info();
-//
-//		operand_info *i = out->add_elem();
-//		i->set_allocated_operand_info_specific(s);
-//		i->set_bit_length(8);
-//		i->set_allocated_operand_usage(u);
-//		i->set_allocated_taint_info(ti);
-//
-//		i->set_value(std::string((const char *)&op->SFRs[idx], 1));
-//	}
+static void push_mems(operand_value_list *out, TraceMem *mems, size_t count, bool r, bool w) {
+	for (size_t idx = 0; idx < count; idx++) {
+		TraceMem *m = &mems[idx];
+
+		mem_operand *mo = new mem_operand();
+		mo->set_address(m->addr);
+		operand_info_specific *s = new operand_info_specific();
+		s->set_allocated_mem_operand(mo);
+
+		operand_usage *u = new operand_usage();
+		u->set_read(r);
+		u->set_written(w);
+		u->set_index(false);
+		u->set_base(false);
+
+		taint_info *ti = new taint_info();
+
+		operand_info *i = out->add_elem();
+		i->set_allocated_operand_info_specific(s);
+		i->set_bit_length(8);
+		i->set_allocated_operand_usage(u);
+		i->set_allocated_taint_info(ti);
+		i->set_value(std::string((const char *)&m->val, 1));
+	}
 }
 
 extern "C" void trace_push(TraceFrame8051 *tf) {
@@ -229,11 +205,11 @@ extern "C" void trace_push(TraceFrame8051 *tf) {
 
 	operand_value_list *pre = new operand_value_list();
 	push_regs(pre, &tf->pre, true, false, nullptr);
-	push_mems(pre, &tf->pre, 0, true, false);
+	push_mems(pre, tf->pre.mems, tf->pre.mems_count, true, false);
 
 	operand_value_list *post = new operand_value_list();
 	push_regs(post, &tf->post, false, true, &tf->pre);
-	push_mems(post, &tf->post, 0, false, true);
+	push_mems(post, tf->post.mems, tf->post.mems_count, false, true);
 
 	std_frame *sf = new std_frame();
 	sf->set_address(tf->pre.pc);

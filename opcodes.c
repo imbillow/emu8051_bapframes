@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "emu8051.h"
+#include "trace.h"
 
 #define BAD_VALUE        0x77
 #define PSW              aCPU->mSFR[REG_PSW]
@@ -47,27 +48,47 @@
 #define RX_ADDRESS       ((OPCODE & 7) + 8 * PSW_BANK)
 #define CARRY            ((PSW & PSWMASK_C) >> PSW_C)
 
+inline static void memtrace_access(unsigned int addr, uint8_t val, int write, int dummy) {
+	if (dummy) {
+		return;
+	}
+	TraceOperands8051 *to = write ? &build_frame.post : &build_frame.pre;
+	if (to->mems_count >= TRACE_MEM_MAX) {
+		fprintf(stderr, "trace mem overflow\n");
+		return;
+	}
+	TraceMem *m = &to->mems[to->mems_count++];
+	m->addr = (uint16_t)addr;
+	m->val = val;
+}
+
 static uint8_t read_mem(struct em8051 *aCPU, uint8_t aAddress) {
+	uint8_t value = BAD_VALUE;
 	if (aAddress > 0x7f) {
 		if (aCPU->sfrread[aAddress - 0x80])
-			return aCPU->sfrread[aAddress - 0x80](aCPU, aAddress);
+			value = aCPU->sfrread[aAddress - 0x80](aCPU, aAddress);
 		else
-			return aCPU->mSFR[aAddress - 0x80];
+			value = aCPU->mSFR[aAddress - 0x80];
 	} else {
-		return aCPU->mLowerData[aAddress];
+		value = aCPU->mLowerData[aAddress];
 	}
+
+	memtrace_access(aAddress, value, 0, 0);
+	return value;
 }
 
 static uint8_t read_mem_indir(struct em8051 *aCPU, uint8_t aAddress) {
+	uint8_t value = BAD_VALUE;
 	if (aAddress > 0x7f) {
 		if (aCPU->mUpperData) {
-			return aCPU->mUpperData[aAddress - 0x80];
+			value = aCPU->mUpperData[aAddress - 0x80];
 		}
 	} else {
-		return aCPU->mLowerData[aAddress];
+		value = aCPU->mLowerData[aAddress];
 	}
 
-	return BAD_VALUE;
+	memtrace_access(aAddress, value, 0, 0);
+	return value;
 }
 
 static void write_mem(struct em8051 *aCPU, uint8_t aAddress, uint8_t value) {
@@ -78,6 +99,7 @@ static void write_mem(struct em8051 *aCPU, uint8_t aAddress, uint8_t value) {
 	} else {
 		aCPU->mLowerData[aAddress] = value;
 	}
+	memtrace_access(aAddress, value, 1, 0);
 }
 
 static void write_mem_indir(struct em8051 *aCPU, uint8_t aAddress, uint8_t value) {
@@ -88,6 +110,7 @@ static void write_mem_indir(struct em8051 *aCPU, uint8_t aAddress, uint8_t value
 	} else {
 		aCPU->mLowerData[aAddress] = value;
 	}
+	memtrace_access(aAddress, value, 1, 0);
 }
 
 void push_to_stack(struct em8051 *aCPU, uint8_t aValue) {
