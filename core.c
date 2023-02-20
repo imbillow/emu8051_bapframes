@@ -384,11 +384,11 @@ void handle_interrupts(struct em8051 *aCPU) {
 	aCPU->int_sp[hi] = aCPU->mSFR[REG_SP];
 }
 
-void dump_operands(struct em8051 *aCPU, TraceOperands8051 *aTrace) {
-	aTrace->pc = aCPU->mPC;
-	memcpy(aTrace->SFRs, aCPU->mSFR, sizeof(aCPU->mSFR));
-	memcpy(aTrace->lower, aCPU->mLowerData, sizeof(aCPU->mLowerData));
-}
+// void dump_operands(struct em8051 *aCPU) {
+//	aTrace->pc = aCPU->mPC;
+//	memcpy(aTrace->SFRs, aCPU->mSFR, sizeof(aCPU->mSFR));
+//	memcpy(aTrace->lower, aCPU->mLowerData, sizeof(aCPU->mLowerData));
+// }
 
 // clang-format off
 static const uint8_t opcode_size[256] = {
@@ -436,9 +436,10 @@ bool tick(struct em8051 *aCPU) {
 
 	if (aCPU->mTickDelay == 0) {
 		if (trace_is_open()) {
-			build_frame.op_size = opcode_size[aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)]];
-			memcpy(build_frame.op, (const void *)&aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)], build_frame.op_size);
-			dump_operands(aCPU, &build_frame.pre);
+			//			build_frame.op_size = opcode_size[aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)]];
+			//			memcpy(build_frame.op, (const void *)&aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)], build_frame.op_size);
+			//			dump_operands(aCPU, &build_frame.pre);
+			set_trace_op((const void *)&aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)], opcode_size[aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)]]);
 		}
 
 		// IDL activate the idle mode to save power
@@ -457,8 +458,8 @@ bool tick(struct em8051 *aCPU) {
 		aCPU->mSFR[REG_PSW] = (aCPU->mSFR[REG_PSW] & ~PSWMASK_P) | (v * PSWMASK_P);
 
 		if (trace_is_open()) {
-			dump_operands(aCPU, &build_frame.post);
-			trace_push(&build_frame);
+			//			dump_operands(aCPU, &build_frame.post);
+			trace_push();
 		}
 	}
 

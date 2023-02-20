@@ -32,21 +32,62 @@
 #include "emu8051.h"
 #include "trace.h"
 
+static const char *regname[0xff] = {
+	[REG_SP] = "sp",
+	[REG_PSW] = "psw",
+	[REG_ACC] = "acc",
+	[REG_B] = "b",
+	[REG_DPH] = "dph",
+	[REG_DPL] = "dpl",
+	//	[REG_PCON] = "pcon",
+	//	[REG_TCON] = "tcon",
+	//	[REG_TMOD] = "tmod",
+	//	[REG_TL0] = "tl0",
+	//	[REG_TL1] = "tl1",
+	//	[REG_TH0] = "th0",
+	//	[REG_TH1] = "th1",
+	//	[REG_IE] = "ie",
+	//	[REG_IP] = "ip",
+	//	[REG_P0] = "p0",
+	//	[REG_P1] = "p1",
+	//	[REG_P2] = "p2",
+	//	[REG_P3] = "p3",
+	//	[REG_SCON] = "scon",
+	//	[REG_SBUF] = "sbuf",
+	NULL
+};
+
+static const char *regxname[0xff] = {
+	"r0",
+	"r1",
+	"r2",
+	"r3",
+	"r4",
+	"r5",
+	"r6",
+	"r7",
+	NULL
+};
+
 static inline uint8_t read_SFR(struct em8051 *aCPU, enum SFR_REGS reg) {
 	uint8_t value = aCPU->mSFR[reg];
+	register_push(regname[reg], value, 8, false);
 	return value;
 }
 
 static inline void write_SFR(struct em8051 *aCPU, enum SFR_REGS reg, uint8_t value) {
+	register_push(regname[reg], value, 8, true);
 	aCPU->mSFR[reg] = value;
 }
 
 static inline uint16_t read_pc(struct em8051 *aCPU) {
 	uint16_t value = aCPU->mPC;
+	register_push("pc", value, 16, false);
 	return value;
 }
 
 static inline void write_pc(struct em8051 *aCPU, uint16_t value) {
+	register_push("pc", value, 16, true);
 	aCPU->mPC = value;
 }
 
@@ -59,6 +100,7 @@ static inline uint8_t read_Rx_address(struct em8051 *aCPU) {
 static inline uint8_t read_Rx_indir(struct em8051 *aCPU) {
 	uint8_t x = aCPU->mCodeMem[aCPU->mPC & aCPU->mCodeMemMaxIdx] & 1;
 	uint8_t value = aCPU->mLowerData[x + read_SFR(aCPU, REG_PSW) & (PSWMASK_RS0 | PSWMASK_RS1)];
+	register_push(regxname[x], value, 8, false);
 	return value;
 }
 
@@ -77,18 +119,11 @@ static inline uint8_t read_Rx_indir(struct em8051 *aCPU) {
 #define RX_ADDRESS       read_Rx_address(aCPU)
 #define CARRY            ((PSW & PSWMASK_C) >> PSW_C)
 
-inline static void memtrace_access(unsigned int addr, uint8_t val, int write, int dummy) {
+inline static void memtrace_access(uint16_t addr, uint8_t val, int write, int dummy) {
 	if (dummy) {
 		return;
 	}
-	TraceOperands8051 *to = write ? &build_frame.post : &build_frame.pre;
-	if (to->mems_count >= TRACE_MEM_MAX) {
-		fprintf(stderr, "trace mem overflow\n");
-		return;
-	}
-	TraceMem *m = &to->mems[to->mems_count++];
-	m->addr = (uint16_t)addr;
-	m->val = val;
+	mem_push(addr, val, write);
 }
 
 static uint8_t read_mem(struct em8051 *aCPU, uint8_t aAddress) {
@@ -184,9 +219,7 @@ static void sub_solve_flags(struct em8051 *aCPU, uint8_t value1, uint8_t value2,
 }
 
 static uint8_t ajmp_offset(struct em8051 *aCPU) {
-	uint16_t address = ((PC + 2) & 0xf800) |
-		OPERAND1 |
-		((OPCODE & 0xe0) << 3);
+	uint16_t address = ((PC + 2) & 0xf800) | OPERAND1 | ((OPCODE & 0xe0) << 3);
 	write_pc(aCPU, address);
 	return 1;
 }
