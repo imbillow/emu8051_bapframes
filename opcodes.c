@@ -198,7 +198,6 @@ static void write_xdata(struct em8051 *aCPU, uint16_t aAddress, uint8_t value) {
 #define PC               read_pc(aCPU)
 #define CODEMEM(x)       aCPU->mCodeMem[(x) & (aCPU->mCodeMemMaxIdx)]
 #define EXTDATA(x)       read_xdata(aCPU, x)
-#define UPRDATA(x)       aCPU->mUpperData[(x)-0x80]
 #define OPCODE           CODEMEM(PC + 0)
 #define OPERAND1         CODEMEM(PC + 1)
 #define OPERAND2         CODEMEM(PC + 2)
