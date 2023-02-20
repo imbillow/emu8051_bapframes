@@ -104,28 +104,14 @@ static inline uint8_t read_Rx_indir(struct em8051 *aCPU) {
 	return value;
 }
 
-#define BAD_VALUE        0x77
-#define PSW              read_SFR(aCPU, REG_PSW)
-#define ACC              read_SFR(aCPU, REG_ACC)
-#define SP               read_SFR(aCPU, REG_SP)
-#define DPTR             (((uint16_t)read_SFR(aCPU, REG_DPH) << 8) | read_SFR(aCPU, REG_DPL))
-#define PC               read_pc(aCPU)
-#define CODEMEM(x)       aCPU->mCodeMem[(x) & (aCPU->mCodeMemMaxIdx)]
-#define EXTDATA(x)       aCPU->mExtData[(x) & (aCPU->mExtDataMaxIdx)]
-#define UPRDATA(x)       aCPU->mUpperData[(x)-0x80]
-#define OPCODE           CODEMEM(PC + 0)
-#define OPERAND1         CODEMEM(PC + 1)
-#define OPERAND2         CODEMEM(PC + 2)
-#define INDIR_RX_ADDRESS read_Rx_indir(aCPU)
-#define RX_ADDRESS       read_Rx_address(aCPU)
-#define CARRY            ((PSW & PSWMASK_C) >> PSW_C)
-
 inline static void memtrace_access(uint16_t addr, uint8_t val, int write, int dummy) {
 	if (dummy) {
 		return;
 	}
 	mem_push(addr, val, write);
 }
+
+#define BAD_VALUE 0x77
 
 static uint8_t read_mem(struct em8051 *aCPU, uint8_t aAddress) {
 	uint8_t value = BAD_VALUE;
@@ -180,6 +166,45 @@ static void write_mem_indir(struct em8051 *aCPU, uint8_t aAddress, uint8_t value
 		memtrace_access(aAddress, value, 1, 0);
 	}
 }
+
+// map xdata access to 0x200...
+static uint8_t read_xdata(struct em8051 *aCPU, uint16_t aAddress) {
+	uint8_t value = BAD_VALUE;
+	if (aCPU->xread) {
+		value = aCPU->xread(aCPU, aAddress);
+	} else {
+		if (aCPU->mExtData) {
+			value = aCPU->mExtData[(aAddress) & (aCPU->mExtDataMaxIdx)];
+		}
+	}
+	memtrace_access(aAddress + 0x200, value, 0, 0);
+	return value;
+}
+
+static void write_xdata(struct em8051 *aCPU, uint16_t aAddress, uint8_t value) {
+	if (aCPU->xwrite) {
+		aCPU->xwrite(aCPU, aAddress, value);
+	} else {
+		if (aCPU->mExtData)
+			aCPU->mExtData[(aAddress) & (aCPU->mExtDataMaxIdx)] = value;
+	}
+	memtrace_access(aAddress + 0x200, value, 1, 0);
+}
+
+#define PSW              read_SFR(aCPU, REG_PSW)
+#define ACC              read_SFR(aCPU, REG_ACC)
+#define SP               read_SFR(aCPU, REG_SP)
+#define DPTR             (((uint16_t)read_SFR(aCPU, REG_DPH) << 8) | read_SFR(aCPU, REG_DPL))
+#define PC               read_pc(aCPU)
+#define CODEMEM(x)       aCPU->mCodeMem[(x) & (aCPU->mCodeMemMaxIdx)]
+#define EXTDATA(x)       read_xdata(aCPU, x)
+#define UPRDATA(x)       aCPU->mUpperData[(x)-0x80]
+#define OPCODE           CODEMEM(PC + 0)
+#define OPERAND1         CODEMEM(PC + 1)
+#define OPERAND2         CODEMEM(PC + 2)
+#define INDIR_RX_ADDRESS read_Rx_indir(aCPU)
+#define RX_ADDRESS       read_Rx_address(aCPU)
+#define CARRY            ((PSW & PSWMASK_C) >> PSW_C)
 
 void push_to_stack(struct em8051 *aCPU, uint8_t aValue) {
 	uint8_t sp = read_SFR(aCPU, REG_SP) + 1;
@@ -1043,26 +1068,13 @@ static uint8_t xchd_a_indir_rx(struct em8051 *aCPU) {
 }
 
 static uint8_t movx_a_indir_dptr(struct em8051 *aCPU) {
-	uint16_t dptr = DPTR;
-	if (aCPU->xread) {
-		write_SFR(aCPU, REG_ACC, aCPU->xread(aCPU, dptr));
-	} else {
-		if (aCPU->mExtData)
-			write_SFR(aCPU, REG_ACC, EXTDATA(dptr));
-	}
+	write_SFR(aCPU, REG_ACC, EXTDATA(DPTR));
 	write_pc(aCPU, PC + 1);
 	return 1;
 }
 
 static uint8_t movx_a_indir_rx(struct em8051 *aCPU) {
-	uint16_t address = INDIR_RX_ADDRESS;
-	if (aCPU->xread) {
-		write_SFR(aCPU, REG_ACC, aCPU->xread(aCPU, address));
-	} else {
-		if (aCPU->mExtData)
-			write_SFR(aCPU, REG_ACC, EXTDATA(address));
-	}
-
+	write_SFR(aCPU, REG_ACC, EXTDATA(INDIR_RX_ADDRESS));
 	write_pc(aCPU, PC + 1);
 	return 1;
 }
@@ -1093,28 +1105,13 @@ static uint8_t mov_a_indir_rx(struct em8051 *aCPU) {
 }
 
 static uint8_t movx_indir_dptr_a(struct em8051 *aCPU) {
-	uint16_t dptr = DPTR;
-	if (aCPU->xwrite) {
-		aCPU->xwrite(aCPU, dptr, ACC);
-	} else {
-		if (aCPU->mExtData)
-			EXTDATA(dptr) = ACC;
-	}
-
+	write_xdata(aCPU, DPTR, ACC);
 	write_pc(aCPU, PC + 1);
 	return 1;
 }
 
 static uint8_t movx_indir_rx_a(struct em8051 *aCPU) {
-	uint16_t address = INDIR_RX_ADDRESS;
-
-	if (aCPU->xwrite) {
-		aCPU->xwrite(aCPU, address, ACC);
-	} else {
-		if (aCPU->mExtData)
-			EXTDATA(address) = ACC;
-	}
-
+	write_xdata(aCPU, INDIR_RX_ADDRESS, ACC);
 	write_pc(aCPU, PC + 1);
 	return 1;
 }
