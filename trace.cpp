@@ -96,14 +96,6 @@ extern "C" void set_trace_op(const char *op, uint size) {
 	build_frame.op_size = size;
 }
 
-extern "C" void set_trace_pc(uint16_t pc, bool post) {
-	if (!post) {
-		build_frame.pre.pc = pc;
-	} else {
-		build_frame.post.pc = pc;
-	}
-}
-
 void push_reg(operand_value_list *out, const char *name, uint16_t v, size_t bits, bool r, bool w) {
 	reg_operand *ro = new reg_operand();
 	ro->set_name(name);
@@ -131,65 +123,6 @@ static void push_regs(operand_value_list *out, TraceOperands8051 *in, bool r, bo
 	for (const auto &[k, reg] : in->registers) {
 		push_reg(out, k.c_str(), reg.value, reg.bits, r, w);
 	}
-
-	//	if (!diff || in->pc != diff->pc) {
-	//		push_reg(out, "pc", in->pc, 16, r, w);
-	//	}
-
-#define PUSH_SFR(name, reg_idx, bits) \
-	//	do { \
-//		if (!diff || in->SFRs[reg_idx] != diff->SFRs[reg_idx]) { \
-//			push_reg(out, name, in->SFRs[reg_idx], bits, r, w); \
-//		} \
-//	} while (0) \
-	// \
-	//	// 7 Special Function Registers (SFRs). \
-	//	PUSH_SFR("sbuf", REG_SBUF, 8); \
-	//	PUSH_SFR("tcon", REG_TCON, 8); \
-	//	PUSH_SFR("tmod", REG_TMOD, 8); \
-	//	PUSH_SFR("scon", REG_SCON, 8);
-	//	PUSH_SFR("pcon", REG_PCON, 8);
-	//	PUSH_SFR("ip", REG_IP, 8);
-	//	PUSH_SFR("ie", REG_IE, 8);
-	//
-	//	PUSH_SFR("psw", REG_PSW, 8);
-	//
-	//	PUSH_SFR("dpl", REG_DPL, 8);
-	//	PUSH_SFR("dph", REG_DPH, 8);
-	//	if (!diff || in->SFRs[REG_DPL] != diff->SFRs[REG_DPL] || in->SFRs[REG_DPH] != diff->SFRs[REG_DPH]) {
-	//		uint16_t dptr = ((uint16_t)(in->SFRs[REG_DPH]) << 8) | in->SFRs[REG_DPL];
-	//		push_reg(out, "dptr", dptr, 16, r, w);
-	//	}
-	//
-	//	PUSH_SFR("sp", REG_SP, 8);
-	//	PUSH_SFR("acc", REG_ACC, 8);
-	//	PUSH_SFR("b", REG_B, 8);
-	//
-	//	PUSH_SFR("p0", REG_P0, 8);
-	//	PUSH_SFR("p1", REG_P1, 8);
-	//	PUSH_SFR("p2", REG_P2, 8);
-	//	PUSH_SFR("p3", REG_P3, 8);
-	//	PUSH_SFR("tl0", REG_TL0, 8);
-	//	PUSH_SFR("tl1", REG_TL1, 8);
-	//	PUSH_SFR("th0", REG_TH0, 8);
-	//	PUSH_SFR("th1", REG_TH1, 8);
-	//
-	// #define PUSH_GPR(name, reg_idx, bits) \
-//	do { \
-//		if (!diff || in->lower[reg_idx] != diff->lower[reg_idx]) { \
-//			push_reg(out, name, in->lower[reg_idx], bits, r, w); \
-//		} \
-//	} while (0)
-	//	// 8 General Purpose Registers (lower).
-	//	uint8_t bank = (in->SFRs[REG_PSW] & 0x18) >> 3;
-	//	PUSH_GPR("r0", 0x8 * bank, 8);
-	//	PUSH_GPR("r1", 0x8 * bank + 1, 8);
-	//	PUSH_GPR("r2", 0x8 * bank + 2, 8);
-	//	PUSH_GPR("r3", 0x8 * bank + 3, 8);
-	//	PUSH_GPR("r4", 0x8 * bank + 4, 8);
-	//	PUSH_GPR("r5", 0x8 * bank + 5, 8);
-	//	PUSH_GPR("r6", 0x8 * bank + 6, 8);
-	//	PUSH_GPR("r7", 0x8 * bank + 7, 8);
 }
 
 static void push_mems(operand_value_list *out, TraceOperands8051 *in, bool r, bool w) {
@@ -218,7 +151,11 @@ static void push_mems(operand_value_list *out, TraceOperands8051 *in, bool r, bo
 
 void register_push(const char *name, uint16_t v, size_t bits, bool w) {
 	TraceOperands8051 *to = w ? &build_frame.post : &build_frame.pre;
-	to->registers.emplace(std::string{ name }, TraceReg{ v, bits });
+	if (w) {
+		to->registers.insert_or_assign(std::string{ name }, TraceReg{ v, bits });
+	} else {
+		to->registers.emplace(std::string{ name }, TraceReg{ v, bits });
+	}
 }
 
 void mem_push(uint16_t addr, uint8_t v, bool w) {

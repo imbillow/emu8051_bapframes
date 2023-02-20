@@ -107,6 +107,7 @@ static inline uint8_t read_Rx_indir(struct em8051 *aCPU) {
 #define BAD_VALUE        0x77
 #define PSW              read_SFR(aCPU, REG_PSW)
 #define ACC              read_SFR(aCPU, REG_ACC)
+#define SP               read_SFR(aCPU, REG_SP)
 #define DPTR             (((uint16_t)read_SFR(aCPU, REG_DPH) << 8) | read_SFR(aCPU, REG_DPL))
 #define PC               read_pc(aCPU)
 #define CODEMEM(x)       aCPU->mCodeMem[(x) & (aCPU->mCodeMemMaxIdx)]
@@ -181,18 +182,19 @@ static void write_mem_indir(struct em8051 *aCPU, uint8_t aAddress, uint8_t value
 }
 
 void push_to_stack(struct em8051 *aCPU, uint8_t aValue) {
-	aCPU->mSFR[REG_SP]++;
-	write_mem(aCPU, aCPU->mSFR[REG_SP], aValue);
-	if (aCPU->mSFR[REG_SP] == 0)
+	uint8_t sp = read_SFR(aCPU, REG_SP) + 1;
+	write_SFR(aCPU, REG_SP, sp);
+	write_mem(aCPU, sp, aValue);
+	if (sp == 0)
 		if (aCPU->except)
 			aCPU->except(aCPU, EXCEPTION_STACK);
 }
 
 static uint8_t pop_from_stack(struct em8051 *aCPU) {
-	uint8_t value = read_mem(aCPU, aCPU->mSFR[REG_SP]);
-	aCPU->mSFR[REG_SP]--;
-
-	if (aCPU->mSFR[REG_SP] == 0xff)
+	uint8_t sp = read_SFR(aCPU, REG_SP);
+	uint8_t value = read_mem(aCPU, sp);
+	write_SFR(aCPU, REG_SP, sp - 1);
+	if (sp == 0xff)
 		if (aCPU->except)
 			aCPU->except(aCPU, EXCEPTION_STACK);
 	return value;
@@ -259,37 +261,33 @@ static uint8_t inc_indir_rx(struct em8051 *aCPU) {
 	return 0;
 }
 
+static inline uint8_t bitaddr(uint8_t aAddress) {
+	if (aAddress > 0x7f) {
+		aAddress &= 0xf8;
+	} else {
+		aAddress >>= 3;
+		aAddress += 0x20;
+	}
+	return aAddress;
+}
+
+static inline uint8_t bitaddr_mask(uint8_t aAddress) {
+	return 1 << (aAddress & 7);
+}
+
 static uint8_t jbc_bitaddr_offset(struct em8051 *aCPU) {
 	// Note: when this instruction is used to test an output pin, the value used
 	// as the original data will be read from the output data latch, not the input pin
 	// -- MCS(r) 51 Microcontroller Family User's Manual
 	uint8_t address = OPERAND1;
-	if (address > 0x7f) {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address &= 0xf8;
-		value = aCPU->mSFR[address - 0x80];
-
-		if (value & bitmask) {
-			aCPU->mSFR[address - 0x80] &= ~bitmask;
-			write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
-			if (aCPU->sfrwrite[address - 0x80])
-				aCPU->sfrwrite[address - 0x80](aCPU, address);
-		} else {
-			write_pc(aCPU, PC + 3);
-		}
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	if (value & bitmask) {
+		write_mem(aCPU, address, value & (~bitmask));
+		write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
 	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address >>= 3;
-		address += 0x20;
-		if (aCPU->mLowerData[address] & bitmask) {
-			aCPU->mLowerData[address] &= ~bitmask;
-			write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
-		} else {
-			write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
-		}
+		write_pc(aCPU, PC + 3);
 	}
 	return 1;
 }
@@ -342,31 +340,13 @@ static uint8_t dec_indir_rx(struct em8051 *aCPU) {
 
 static uint8_t jb_bitaddr_offset(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
-	if (address > 0x7f) {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address &= 0xf8;
-		if (aCPU->sfrread[address - 0x80])
-			value = aCPU->sfrread[address - 0x80](aCPU, address);
-		else
-			value = aCPU->mSFR[address - 0x80];
-
-		if (value & bitmask) {
-			write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
-		} else {
-			write_pc(aCPU, PC + 3);
-		}
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	if (value & bitmask) {
+		write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
 	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address >>= 3;
-		address += 0x20;
-		if (aCPU->mLowerData[address] & bitmask) {
-			write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
-		} else {
-			write_pc(aCPU, PC + 3);
-		}
+		write_pc(aCPU, PC + 3);
 	}
 	return 1;
 }
@@ -411,31 +391,13 @@ static uint8_t add_a_indir_rx(struct em8051 *aCPU) {
 
 static uint8_t jnb_bitaddr_offset(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
-	if (address > 0x7f) {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address &= 0xf8;
-		if (aCPU->sfrread[address - 0x80])
-			value = aCPU->sfrread[address - 0x80](aCPU, address);
-		else
-			value = aCPU->mSFR[address - 0x80];
-
-		if (!(value & bitmask)) {
-			write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
-		} else {
-			write_pc(aCPU, PC + 3);
-		}
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	if (!(value & bitmask)) {
+		write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
 	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address >>= 3;
-		address += 0x20;
-		if (!(aCPU->mLowerData[address] & bitmask)) {
-			write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
-		} else {
-			write_pc(aCPU, PC + 3);
-		}
+		write_pc(aCPU, PC + 3);
 	}
 	return 1;
 }
@@ -446,12 +408,12 @@ static uint8_t reti(struct em8051 *aCPU) {
 			uint8_t hi = 0;
 			if (aCPU->mInterruptActive > 1)
 				hi = 1;
-			if (aCPU->int_a[hi] != aCPU->mSFR[REG_ACC])
+			if (aCPU->int_a[hi] != ACC)
 				aCPU->except(aCPU, EXCEPTION_IRET_ACC_MISMATCH);
-			if (aCPU->int_sp[hi] != aCPU->mSFR[REG_SP])
+			if (aCPU->int_sp[hi] != SP)
 				aCPU->except(aCPU, EXCEPTION_IRET_SP_MISMATCH);
 			if ((aCPU->int_psw[hi] & (PSWMASK_OV | PSWMASK_RS0 | PSWMASK_RS1 | PSWMASK_AC | PSWMASK_C)) !=
-				(aCPU->mSFR[REG_PSW] & (PSWMASK_OV | PSWMASK_RS0 | PSWMASK_RS1 | PSWMASK_AC | PSWMASK_C)))
+				(PSW & (PSWMASK_OV | PSWMASK_RS0 | PSWMASK_RS1 | PSWMASK_AC | PSWMASK_C)))
 				aCPU->except(aCPU, EXCEPTION_IRET_PSW_MISMATCH);
 		}
 
@@ -653,27 +615,11 @@ static uint8_t jnz_offset(struct em8051 *aCPU) {
 static uint8_t orl_c_bitaddr(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
 	bool carry = CARRY;
-	if (address > 0x7f) {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address &= 0xf8;
-		if (aCPU->sfrread[address - 0x80])
-			value = aCPU->sfrread[address - 0x80](aCPU, address);
-		else
-			value = aCPU->mSFR[address - 0x80];
-
-		value = (value & bitmask) ? 1 : carry;
-		write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address >>= 3;
-		address += 0x20;
-		value = (aCPU->mLowerData[address] & bitmask) ? 1 : carry;
-		write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
-	}
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	value = (value & bitmask) ? 1 : carry;
+	write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
 	write_pc(aCPU, PC + 2);
 	return 1;
 }
@@ -711,27 +657,11 @@ static uint8_t sjmp_offset(struct em8051 *aCPU) {
 static uint8_t anl_c_bitaddr(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
 	bool carry = CARRY;
-	if (address > 0x7f) {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address &= 0xf8;
-		if (aCPU->sfrread[address - 0x80])
-			value = aCPU->sfrread[address - 0x80](aCPU, address);
-		else
-			value = aCPU->mSFR[address - 0x80];
-
-		value = (value & bitmask) ? carry : 0;
-		write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address >>= 3;
-		address += 0x20;
-		value = (aCPU->mLowerData[address] & bitmask) ? carry : 0;
-		write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
-	}
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	value = (value & bitmask) ? carry : 0;
+	write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
 	write_pc(aCPU, PC + 2);
 	return 0;
 }
@@ -745,7 +675,7 @@ static uint8_t movc_a_indir_a_pc(struct em8051 *aCPU) {
 
 static uint8_t div_ab(struct em8051 *aCPU) {
 	uint8_t a = ACC;
-	uint8_t b = aCPU->mSFR[REG_B];
+	uint8_t b = read_SFR(aCPU, REG_B);
 	uint8_t res;
 	uint8_t psw = PSW & (~(PSWMASK_C | PSWMASK_OV));
 	if (b) {
@@ -788,25 +718,13 @@ static uint8_t mov_dptr_imm(struct em8051 *aCPU) {
 }
 
 static uint8_t mov_bitaddr_c(struct em8051 *aCPU) {
-	uint8_t address = OPERAND1;
+	uint8_t addr = OPERAND1;
 	bool carry = CARRY;
-	if (address > 0x7f) {
-		// Note: when this instruction is used to test an output pin, the value used
-		// as the original data will be read from the output data latch, not the input pin
-		// -- MCS(r) 51 Microcontroller Family User's Manual
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address &= 0xf8;
-		aCPU->mSFR[address - 0x80] = (aCPU->mSFR[address - 0x80] & ~bitmask) | (carry << bitaddr);
-		if (aCPU->sfrwrite[address - 0x80])
-			aCPU->sfrwrite[address - 0x80](aCPU, address);
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address >>= 3;
-		address += 0x20;
-		aCPU->mLowerData[address] = (aCPU->mLowerData[address] & ~bitmask) | (carry << bitaddr);
-	}
+	uint8_t bitmask = bitaddr_mask(addr);
+	uint8_t address = bitaddr(addr);
+	uint8_t value = read_mem(aCPU, address);
+	value = (value & ~bitmask) | (carry << (addr & 7));
+	write_mem(aCPU, address, value);
 	write_pc(aCPU, PC + 2);
 	return 1;
 }
@@ -847,61 +765,24 @@ static uint8_t subb_a_indir_rx(struct em8051 *aCPU) {
 static uint8_t orl_c_compl_bitaddr(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
 	bool carry = CARRY;
-	uint8_t psw = BAD_VALUE;
-	if (address > 0x7f) {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address &= 0xf8;
-		if (aCPU->sfrread[address - 0x80])
-			value = aCPU->sfrread[address - 0x80](aCPU, address);
-		else
-			value = aCPU->mSFR[address - 0x80];
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	value = (value & bitmask) ? carry : 1;
 
-		value = (value & bitmask) ? carry : 1;
-
-		psw = (PSW & ~PSWMASK_C) | (PSWMASK_C * value);
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address >>= 3;
-		address += 0x20;
-		value = (aCPU->mLowerData[address] & bitmask) ? carry : 1;
-		psw = (PSW & ~PSWMASK_C) | (PSWMASK_C * value);
-	}
-	write_SFR(aCPU, REG_PSW, psw);
+	write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t mov_c_bitaddr(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
-	uint8_t psw = BAD_VALUE;
-	if (address > 0x7f) {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address &= 0xf8;
-		if (aCPU->sfrread[address - 0x80])
-			value = aCPU->sfrread[address - 0x80](aCPU, address);
-		else
-			value = aCPU->mSFR[address - 0x80];
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	value = (value & bitmask) ? 1 : 0;
 
-		value = (value & bitmask) ? 1 : 0;
-
-		psw = (PSW & ~PSWMASK_C) | (PSWMASK_C * value);
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address >>= 3;
-		address += 0x20;
-		value = (aCPU->mLowerData[address] & bitmask) ? 1 : 0;
-		psw = (PSW & ~PSWMASK_C) | (PSWMASK_C * value);
-	}
-
-	write_SFR(aCPU, REG_PSW, psw);
+	write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
 	write_pc(aCPU, PC + 2);
 	return 0;
 }
@@ -944,53 +825,23 @@ static uint8_t mov_indir_rx_mem(struct em8051 *aCPU) {
 static uint8_t anl_c_compl_bitaddr(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
 	bool carry = CARRY;
-	uint8_t psw = BAD_VALUE;
-	if (address > 0x7f) {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address &= 0xf8;
-		if (aCPU->sfrread[address - 0x80])
-			value = aCPU->sfrread[address - 0x80](aCPU, address);
-		else
-			value = aCPU->mSFR[address - 0x80];
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	value = (value & bitmask) ? 0 : carry;
 
-		value = (value & bitmask) ? 0 : carry;
-
-		psw = (PSW & ~PSWMASK_C) | (PSWMASK_C * value);
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		uint8_t value;
-		address >>= 3;
-		address += 0x20;
-		value = (aCPU->mLowerData[address] & bitmask) ? 0 : carry;
-		psw = (PSW & ~PSWMASK_C) | (PSWMASK_C * value);
-	}
-	write_SFR(aCPU, REG_PSW, psw);
+	write_SFR(aCPU, REG_PSW, (PSW & ~PSWMASK_C) | (PSWMASK_C * value));
 	write_pc(aCPU, PC + 2);
 	return 0;
 }
 
 static uint8_t cpl_bitaddr(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
-	if (address > 0x7f) {
-		// Note: when this instruction is used to test an output pin, the value used
-		// as the original data will be read from the output data latch, not the input pin
-		// -- MCS(r) 51 Microcontroller Family User's Manual
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address &= 0xf8;
-		aCPU->mSFR[address - 0x80] ^= bitmask;
-		if (aCPU->sfrwrite[address - 0x80])
-			aCPU->sfrwrite[address - 0x80](aCPU, address);
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address >>= 3;
-		address += 0x20;
-		aCPU->mLowerData[address] ^= bitmask;
-	}
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	value = value ^ bitmask;
+	write_mem(aCPU, address, value);
 	write_pc(aCPU, PC + 2);
 	return 0;
 }
@@ -1070,23 +921,11 @@ static uint8_t push_mem(struct em8051 *aCPU) {
 
 static uint8_t clr_bitaddr(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
-	if (address > 0x7f) {
-		// Note: when this instruction is used to test an output pin, the value used
-		// as the original data will be read from the output data latch, not the input pin
-		// -- MCS(r) 51 Microcontroller Family User's Manual
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address &= 0xf8;
-		aCPU->mSFR[address - 0x80] &= ~bitmask;
-		if (aCPU->sfrwrite[address - 0x80])
-			aCPU->sfrwrite[address - 0x80](aCPU, address);
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address >>= 3;
-		address += 0x20;
-		aCPU->mLowerData[address] &= ~bitmask;
-	}
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	value = value & ~bitmask;
+	write_mem(aCPU, address, value);
 	write_pc(aCPU, PC + 2);
 	return 0;
 }
@@ -1132,23 +971,11 @@ static uint8_t pop_mem(struct em8051 *aCPU) {
 
 static uint8_t setb_bitaddr(struct em8051 *aCPU) {
 	uint8_t address = OPERAND1;
-	if (address > 0x7f) {
-		// Note: when this instruction is used to test an output pin, the value used
-		// as the original data will be read from the output data latch, not the input pin
-		// -- MCS(r) 51 Microcontroller Family User's Manual
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address &= 0xf8;
-		aCPU->mSFR[address - 0x80] |= bitmask;
-		if (aCPU->sfrwrite[address - 0x80])
-			aCPU->sfrwrite[address - 0x80](aCPU, address);
-	} else {
-		uint8_t bitaddr = address & 7;
-		uint8_t bitmask = (1 << bitaddr);
-		address >>= 3;
-		address += 0x20;
-		aCPU->mLowerData[address] |= bitmask;
-	}
+	uint8_t bitmask = bitaddr_mask(address);
+	address = bitaddr(address);
+	uint8_t value = read_mem(aCPU, address);
+	value = value | bitmask;
+	write_mem(aCPU, address, value);
 	write_pc(aCPU, PC + 2);
 	return 0;
 }
