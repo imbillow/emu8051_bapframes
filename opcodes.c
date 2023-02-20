@@ -32,10 +32,21 @@
 #include "emu8051.h"
 #include "trace.h"
 
-#define BAD_VALUE        0x77
-#define PSW              aCPU->mSFR[REG_PSW]
-#define ACC              aCPU->mSFR[REG_ACC]
-#define DPTR             ((aCPU->mSFR[REG_DPH] << 8) | (aCPU->mSFR[REG_DPL]))
+static inline uint8_t read_register(struct em8051 *aCPU, enum SFR_REGS reg) {
+	uint8_t value = aCPU->mSFR[reg];
+
+	return value;
+}
+
+static inline void write_register(struct em8051 *aCPU, enum SFR_REGS reg, uint8_t value) {
+
+	aCPU->mSFR[reg] = value;
+}
+
+#define BAD_VALUE 0x77
+#define PSW       read_register(aCPU, REG_PSW)
+#define ACC       read_register(aCPU, REG_ACC)
+#define DPTR             (((uint16_t)read_register(aCPU, REG_DPH) << 8) | read_register(aCPU, REG_DPL))
 #define PC               aCPU->mPC
 #define CODEMEM(x)       aCPU->mCodeMem[(x) & (aCPU->mCodeMemMaxIdx)]
 #define EXTDATA(x)       aCPU->mExtData[(x) & (aCPU->mExtDataMaxIdx)]
@@ -82,12 +93,13 @@ static uint8_t read_mem_indir(struct em8051 *aCPU, uint8_t aAddress) {
 	if (aAddress > 0x7f) {
 		if (aCPU->mUpperData) {
 			value = aCPU->mUpperData[aAddress - 0x80];
+			// map indirect access to upper data to 0x180-0x200
+			memtrace_access(aAddress + 0x100, value, 0, 0);
 		}
 	} else {
 		value = aCPU->mLowerData[aAddress];
+		memtrace_access(aAddress, value, 0, 0);
 	}
-
-	memtrace_access(aAddress, value, 0, 0);
 	return value;
 }
 
@@ -106,11 +118,13 @@ static void write_mem_indir(struct em8051 *aCPU, uint8_t aAddress, uint8_t value
 	if (aAddress > 0x7f) {
 		if (aCPU->mUpperData) {
 			aCPU->mUpperData[aAddress - 0x80] = value;
+			// map indirect access to upper data to 0x180-0x200
+			memtrace_access(aAddress + 0x100, value, 1, 0);
 		}
 	} else {
 		aCPU->mLowerData[aAddress] = value;
+		memtrace_access(aAddress, value, 1, 0);
 	}
-	memtrace_access(aAddress, value, 1, 0);
 }
 
 void push_to_stack(struct em8051 *aCPU, uint8_t aValue) {

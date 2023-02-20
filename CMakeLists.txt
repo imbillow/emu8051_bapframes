@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 project(emu8051)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 17)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NCURSES ncurses REQUIRED)

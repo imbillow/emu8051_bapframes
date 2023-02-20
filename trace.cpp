@@ -87,6 +87,30 @@ static void push_reg(operand_value_list *out, const char *name, uint16_t v, size
 	i->set_value(std::string((const char *)va, bits / 8));
 }
 
+static const char *i8051_registers_str[0xff] = {
+	[REG_SP] = "sp",
+	[REG_PSW] = "psw",
+	[REG_ACC] = "acc",
+	[REG_B] = "b",
+	[REG_DPH] = "dph",
+	[REG_DPL] = "dpl",
+	//	[REG_PCON] = "pcon",
+	//	[REG_TCON] = "tcon",
+	//	[REG_TMOD] = "tmod",
+	//	[REG_TL0] = "tl0",
+	//	[REG_TL1] = "tl1",
+	//	[REG_TH0] = "th0",
+	//	[REG_TH1] = "th1",
+	//	[REG_IE] = "ie",
+	//	[REG_IP] = "ip",
+	//	[REG_P0] = "p0",
+	//	[REG_P1] = "p1",
+	//	[REG_P2] = "p2",
+	//	[REG_P3] = "p3",
+	//	[REG_SCON] = "scon",
+	//	[REG_SBUF] = "sbuf",
+};
+
 static void push_regs(operand_value_list *out, TraceOperands8051 *in, bool r, bool w, TraceOperands8051 *diff) {
 	if (!diff || in->pc != diff->pc) {
 		push_reg(out, "pc", in->pc, 16, r, w);
@@ -118,7 +142,7 @@ static void push_regs(operand_value_list *out, TraceOperands8051 *in, bool r, bo
 	}
 
 	PUSH_SFR("sp", REG_SP, 8);
-	PUSH_SFR("a", REG_ACC, 8);
+	PUSH_SFR("acc", REG_ACC, 8);
 	PUSH_SFR("b", REG_B, 8);
 
 	PUSH_SFR("p0", REG_P0, 8);
@@ -148,29 +172,52 @@ static void push_regs(operand_value_list *out, TraceOperands8051 *in, bool r, bo
 	PUSH_GPR("r7", 0x8 * bank + 7, 8);
 }
 
-static const std::set<uint8_t> regs = {
+static const std::set<uint8_t> sync_registers = {
 	REG_ACC,
 	REG_B,
 	REG_PSW,
 	REG_SP,
 	REG_DPL,
 	REG_DPH,
-	REG_P0,
-	REG_P1,
-	REG_P2,
-	REG_P3,
-	REG_IP,
-	REG_IE,
-	REG_TMOD,
-	REG_TCON,
-	REG_TH0,
-	REG_TL0,
-	REG_TH1,
-	REG_TL1,
-	REG_SCON,
-	REG_SBUF,
-	REG_PCON,
+	//	REG_P0,
+	//	REG_P1,
+	//	REG_P2,
+	//	REG_P3,
+	//	REG_IP,
+	//	REG_IE,
+	//	REG_TMOD,
+	//	REG_TCON,
+	//	REG_TH0,
+	//	REG_TL0,
+	//	REG_TH1,
+	//	REG_TL1,
+	//	REG_SCON,
+	//	REG_SBUF,
+	//	REG_PCON,
 };
+
+static const char *registerx_names[] = {
+	"r0",
+	"r1",
+	"r2",
+	"r3",
+	"r4",
+	"r5",
+	"r6",
+	"r7",
+};
+
+static void sync_regs(operand_value_list *out, TraceOperands8051 *in, bool r, bool w) {
+	for (size_t idx = 0; idx < in->mems_count; idx++) {
+		TraceMem *m = &in->mems[idx];
+		uint8_t addr_offset = m->addr - 0x80;
+		if (sync_registers.find(addr_offset) != sync_registers.end()) {
+			push_reg(out, i8051_registers_str[addr_offset], m->val, 8, r, w);
+		} else if (m->addr <= 0x7) {
+			push_reg(out, registerx_names[m->addr], m->val, 8, r, w);
+		}
+	}
+}
 
 static void push_mems(operand_value_list *out, TraceMem *mems, size_t count, bool r, bool w) {
 	for (size_t idx = 0; idx < count; idx++) {
@@ -205,10 +252,12 @@ extern "C" void trace_push(TraceFrame8051 *tf) {
 
 	operand_value_list *pre = new operand_value_list();
 	push_regs(pre, &tf->pre, true, false, nullptr);
+//	sync_regs(pre, &tf->pre, true, false);
 	push_mems(pre, tf->pre.mems, tf->pre.mems_count, true, false);
 
 	operand_value_list *post = new operand_value_list();
 	push_regs(post, &tf->post, false, true, &tf->pre);
+//	sync_regs(post, &tf->post, false, true);
 	push_mems(post, tf->post.mems, tf->post.mems_count, false, true);
 
 	std_frame *sf = new std_frame();
