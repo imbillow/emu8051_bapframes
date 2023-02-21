@@ -17,7 +17,9 @@ void trace_push();
 
 void register_push(const char *name, uint16_t v, size_t bits, bool w);
 void mem_push(uint16_t addr, uint8_t v, bool w);
+void pc_push(uint16_t v, bool pre);
 void set_trace_op(const char *op, uint size);
+
 
 #ifdef __cplusplus
 }

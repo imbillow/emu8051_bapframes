@@ -19,8 +19,8 @@ typedef struct trace_reg_t {
 } TraceReg;
 
 typedef struct trace_operands_t {
-		uint8_t SFRs[128]; // Special Function Registers 128 bytes
-		uint8_t lower[128]; // Lower 128 bytes
+//		uint8_t SFRs[128]; // Special Function Registers 128 bytes
+//		uint8_t lower[128]; // Lower 128 bytes
 		uint16_t pc; // Program Counter; outside memory area
 		std::map<std::string, TraceReg> registers;
 		std::vector<TraceMem> mems;
@@ -161,6 +161,11 @@ void register_push(const char *name, uint16_t v, size_t bits, bool w) {
 void mem_push(uint16_t addr, uint8_t v, bool w) {
 	TraceOperands8051 *to = w ? &build_frame.post : &build_frame.pre;
 	to->mems.push_back(TraceMem{ addr, v });
+}
+
+void pc_push(uint16_t v, bool pre) {
+	TraceOperands8051 *to = pre ? &build_frame.pre : &build_frame.post;
+	to->pc = v;
 }
 
 extern "C" void trace_push() {

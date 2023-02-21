@@ -82,12 +82,12 @@ static inline void write_SFR(struct em8051 *aCPU, enum SFR_REGS reg, uint8_t val
 
 static inline uint16_t read_pc(struct em8051 *aCPU) {
 	uint16_t value = aCPU->mPC;
-	register_push("pc", value, 16, false);
+//	register_push("pc", value, 16, false);
 	return value;
 }
 
 static inline void write_pc(struct em8051 *aCPU, uint16_t value) {
-	register_push("pc", value, 16, true);
+//	register_push("pc", value, 16, true);
 	aCPU->mPC = value;
 }
 

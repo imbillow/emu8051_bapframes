@@ -436,10 +436,9 @@ bool tick(struct em8051 *aCPU) {
 
 	if (aCPU->mTickDelay == 0) {
 		if (trace_is_open()) {
-			//			build_frame.op_size = opcode_size[aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)]];
-			//			memcpy(build_frame.op, (const void *)&aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)], build_frame.op_size);
-			//			dump_operands(aCPU, &build_frame.pre);
-			set_trace_op((const void *)&aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)], opcode_size[aCPU->mCodeMem[aCPU->mPC & (aCPU->mCodeMemMaxIdx)]]);
+			uint8_t *code_ptr = &aCPU->mCodeMem[aCPU->mPC & aCPU->mCodeMemMaxIdx];
+			set_trace_op((const void *)code_ptr, opcode_size[*code_ptr]);
+			pc_push(aCPU->mPC, true);
 		}
 
 		// IDL activate the idle mode to save power
@@ -458,7 +457,7 @@ bool tick(struct em8051 *aCPU) {
 		aCPU->mSFR[REG_PSW] = (aCPU->mSFR[REG_PSW] & ~PSWMASK_P) | (v * PSWMASK_P);
 
 		if (trace_is_open()) {
-			//			dump_operands(aCPU, &build_frame.post);
+			pc_push(aCPU->mPC, false);
 			trace_push();
 		}
 	}
