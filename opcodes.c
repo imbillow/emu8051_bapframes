@@ -82,12 +82,12 @@ static inline void write_SFR(struct em8051 *aCPU, enum SFR_REGS reg, uint8_t val
 
 static inline uint16_t read_pc(struct em8051 *aCPU) {
 	uint16_t value = aCPU->mPC;
-//	register_push("pc", value, 16, false);
+	//	register_push("pc", value, 16, false);
 	return value;
 }
 
 static inline void write_pc(struct em8051 *aCPU, uint16_t value) {
-//	register_push("pc", value, 16, true);
+	//	register_push("pc", value, 16, true);
 	aCPU->mPC = value;
 }
 
@@ -1213,7 +1213,8 @@ static uint8_t mov_mem_rx(struct em8051 *aCPU) {
 static uint8_t subb_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
 	bool carry = CARRY;
-	sub_solve_flags(aCPU, ACC, aCPU->mLowerData[rx], carry);
+	uint8_t rx_value = read_mem(aCPU, rx);
+	sub_solve_flags(aCPU, ACC, rx_value, carry);
 	write_SFR(aCPU, REG_ACC, ACC - (read_mem(aCPU, rx) + carry));
 	write_pc(aCPU, PC + 1);
 	return 0;
@@ -1230,14 +1231,15 @@ static uint8_t mov_rx_mem(struct em8051 *aCPU) {
 static uint8_t cjne_rx_imm_offset(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
 	uint8_t value = OPERAND1;
+	uint8_t rx_value = read_mem(aCPU, rx);
 
-	if (aCPU->mLowerData[rx] < value) {
+	if (rx_value < value) {
 		write_SFR(aCPU, REG_PSW, PSW | PSWMASK_C);
 	} else {
 		write_SFR(aCPU, REG_PSW, PSW & (~PSWMASK_C));
 	}
 
-	if (aCPU->mLowerData[rx] != value) {
+	if (rx_value != value) {
 		write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
 	} else {
 		write_pc(aCPU, PC + 3);
@@ -1256,7 +1258,8 @@ static uint8_t xch_a_rx(struct em8051 *aCPU) {
 
 static uint8_t djnz_rx_offset(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	uint8_t rx_value = aCPU->mLowerData[rx] - 1;
+	uint8_t rx_value = read_mem(aCPU, rx) - 1;
+	write_mem(aCPU, rx, rx_value);
 	if (rx_value) {
 		write_pc(aCPU, PC + (signed char)OPERAND1 + 2);
 	} else {
