@@ -19,11 +19,11 @@ typedef struct trace_reg_t {
 } TraceReg;
 
 typedef struct trace_operands_t {
-//		uint8_t SFRs[128]; // Special Function Registers 128 bytes
-//		uint8_t lower[128]; // Lower 128 bytes
+		//		uint8_t SFRs[128]; // Special Function Registers 128 bytes
+		//		uint8_t lower[128]; // Lower 128 bytes
 		uint16_t pc; // Program Counter; outside memory area
 		std::map<std::string, TraceReg> registers;
-		std::vector<TraceMem> mems;
+		std::map<uint32_t, uint16_t> mems;
 } TraceOperands8051;
 
 typedef struct trace_frame_t {
@@ -126,9 +126,9 @@ static void push_regs(operand_value_list *out, TraceOperands8051 *in, bool r, bo
 }
 
 static void push_mems(operand_value_list *out, TraceOperands8051 *in, bool r, bool w) {
-	for (const auto &m : in->mems) {
+	for (const auto &[addr, val] : in->mems) {
 		mem_operand *mo = new mem_operand();
-		mo->set_address(m.addr);
+		mo->set_address(addr);
 		operand_info_specific *s = new operand_info_specific();
 		s->set_allocated_mem_operand(mo);
 
@@ -145,7 +145,7 @@ static void push_mems(operand_value_list *out, TraceOperands8051 *in, bool r, bo
 		i->set_bit_length(8);
 		i->set_allocated_operand_usage(u);
 		i->set_allocated_taint_info(ti);
-		i->set_value(std::string((const char *)&m.val, 1));
+		i->set_value(std::string((const char *)&val, 1));
 	}
 }
 
@@ -160,7 +160,11 @@ void register_push(const char *name, uint16_t v, size_t bits, bool w) {
 
 void mem_push(uint16_t addr, uint8_t v, bool w) {
 	TraceOperands8051 *to = w ? &build_frame.post : &build_frame.pre;
-	to->mems.push_back(TraceMem{ addr, v });
+	if (w) {
+		to->mems.insert_or_assign(addr, v);
+	} else {
+		to->mems.emplace(addr, v);
+	}
 }
 
 void pc_push(uint16_t v, bool pre) {

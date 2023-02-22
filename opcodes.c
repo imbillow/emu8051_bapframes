@@ -72,11 +72,13 @@ static const char *regxname[0xff] = {
 static inline uint8_t read_SFR(struct em8051 *aCPU, enum SFR_REGS reg) {
 	uint8_t value = aCPU->mSFR[reg];
 	register_push(regname[reg], value, 8, false);
+	mem_push(reg + 0x80, value, false);
 	return value;
 }
 
 static inline void write_SFR(struct em8051 *aCPU, enum SFR_REGS reg, uint8_t value) {
 	register_push(regname[reg], value, 8, true);
+	mem_push(reg + 0x80, value, true);
 	aCPU->mSFR[reg] = value;
 }
 
@@ -109,6 +111,9 @@ inline static void memtrace_access(uint16_t addr, uint8_t val, int write, int du
 		return;
 	}
 	mem_push(addr, val, write);
+	if (addr >= 0x80 && addr <= 0xff && regname[addr - 0x80]) {
+		register_push(regname[addr - 0x80], val, 8, write);
+	}
 }
 
 #define BAD_VALUE 0x77
