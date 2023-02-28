@@ -95,18 +95,22 @@ static inline void write_pc(struct em8051 *aCPU, uint16_t value) {
 
 static inline uint8_t read_Rx_address(struct em8051 *aCPU) {
 	uint8_t x = aCPU->mCodeMem[aCPU->mPC & aCPU->mCodeMemMaxIdx] & 7;
-	uint8_t addr = x + read_SFR(aCPU, REG_PSW) & (PSWMASK_RS0 | PSWMASK_RS1);
+	uint8_t addr = x + (read_SFR(aCPU, REG_PSW) & (PSWMASK_RS0 | PSWMASK_RS1));
 	return addr;
 }
 
 static inline uint8_t read_Rx_indir(struct em8051 *aCPU) {
 	uint8_t x = aCPU->mCodeMem[aCPU->mPC & aCPU->mCodeMemMaxIdx] & 1;
-	uint8_t value = aCPU->mLowerData[x + read_SFR(aCPU, REG_PSW) & (PSWMASK_RS0 | PSWMASK_RS1)];
+	uint8_t value = aCPU->mLowerData[x + (read_SFR(aCPU, REG_PSW) & (PSWMASK_RS0 | PSWMASK_RS1))];
 	register_push(regxname[x], value, 8, false);
 	return value;
 }
 
-inline static void memtrace_access(uint16_t addr, uint8_t val, int write, int dummy) {
+static inline void rx_trace_access(uint16_t addr, uint8_t val, int write) {
+	register_push(regxname[addr % 0x8], val, 8, write);
+}
+
+static inline void memtrace_access(uint16_t addr, uint8_t val, int write, int dummy) {
 	if (dummy) {
 		return;
 	}
@@ -1150,77 +1154,106 @@ static uint8_t nop(struct em8051 *aCPU) {
 
 static uint8_t inc_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	write_mem(aCPU, rx, read_mem(aCPU, rx) + 1);
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+	rx_trace_access(rx, rx_val + 1, true);
+	write_mem(aCPU, rx, rx_val + 1);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t dec_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	write_mem(aCPU, rx, read_mem(aCPU, rx) - 1);
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
+	write_mem(aCPU, rx, rx_val - 1);
+	rx_trace_access(rx, rx_val - 1, true);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t add_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	add_solve_flags(aCPU, read_mem(aCPU, rx), ACC, 0);
-	write_SFR(aCPU, REG_ACC, ACC + read_mem(aCPU, rx));
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
+	add_solve_flags(aCPU, rx_val, ACC, 0);
+	write_SFR(aCPU, REG_ACC, ACC + rx_val);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t addc_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
 	bool carry = CARRY;
-	add_solve_flags(aCPU, read_mem(aCPU, rx), ACC, carry);
-	write_SFR(aCPU, REG_ACC, ACC + read_mem(aCPU, rx));
+	add_solve_flags(aCPU, rx_val, ACC, carry);
+	write_SFR(aCPU, REG_ACC, ACC + rx_val);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t orl_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	write_SFR(aCPU, REG_ACC, ACC | read_mem(aCPU, rx));
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
+	write_SFR(aCPU, REG_ACC, ACC | rx_val);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t anl_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	write_SFR(aCPU, REG_ACC, ACC & read_mem(aCPU, rx));
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
+	write_SFR(aCPU, REG_ACC, ACC & rx_val);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t xrl_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	write_SFR(aCPU, REG_ACC, ACC ^ read_mem(aCPU, rx));
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
+	write_SFR(aCPU, REG_ACC, ACC ^ rx_val);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t mov_rx_imm(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	write_mem(aCPU, rx, OPERAND1);
+	uint8_t imm = OPERAND1;
+	rx_trace_access(rx, imm, true);
+	write_mem(aCPU, rx, imm);
 	write_pc(aCPU, PC + 2);
 	return 0;
 }
 
 static uint8_t mov_mem_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
 	uint8_t address = OPERAND1;
-	write_mem(aCPU, address, read_mem(aCPU, rx));
+	write_mem(aCPU, address, rx_val);
 	write_pc(aCPU, PC + 2);
 	return 1;
 }
 
 static uint8_t subb_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
 	bool carry = CARRY;
-	uint8_t rx_value = read_mem(aCPU, rx);
-	sub_solve_flags(aCPU, ACC, rx_value, carry);
-	write_SFR(aCPU, REG_ACC, ACC - (read_mem(aCPU, rx) + carry));
+	sub_solve_flags(aCPU, ACC, rx_val, carry);
+	write_SFR(aCPU, REG_ACC, ACC - (rx_val + carry));
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
@@ -1228,6 +1261,7 @@ static uint8_t subb_a_rx(struct em8051 *aCPU) {
 static uint8_t mov_rx_mem(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
 	uint8_t value = read_mem(aCPU, OPERAND1);
+	rx_trace_access(rx, value, true);
 	write_mem(aCPU, rx, value);
 	write_pc(aCPU, PC + 2);
 	return 1;
@@ -1236,15 +1270,16 @@ static uint8_t mov_rx_mem(struct em8051 *aCPU) {
 static uint8_t cjne_rx_imm_offset(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
 	uint8_t value = OPERAND1;
-	uint8_t rx_value = read_mem(aCPU, rx);
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
 
-	if (rx_value < value) {
+	if (rx_val < value) {
 		write_SFR(aCPU, REG_PSW, PSW | PSWMASK_C);
 	} else {
 		write_SFR(aCPU, REG_PSW, PSW & (~PSWMASK_C));
 	}
 
-	if (rx_value != value) {
+	if (rx_val != value) {
 		write_pc(aCPU, PC + (signed char)OPERAND2 + 3);
 	} else {
 		write_pc(aCPU, PC + 3);
@@ -1254,18 +1289,25 @@ static uint8_t cjne_rx_imm_offset(struct em8051 *aCPU) {
 
 static uint8_t xch_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
 	uint8_t a = ACC;
-	write_SFR(aCPU, REG_ACC, read_mem(aCPU, rx));
+	write_SFR(aCPU, REG_ACC, rx_val);
 	write_mem(aCPU, rx, a);
+	rx_trace_access(rx, a, true);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t djnz_rx_offset(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	uint8_t rx_value = read_mem(aCPU, rx) - 1;
-	write_mem(aCPU, rx, rx_value);
-	if (rx_value) {
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+	rx_trace_access(rx, rx_val - 1, true);
+	write_mem(aCPU, rx, rx_val - 1);
+
+	if (rx_val) {
 		write_pc(aCPU, PC + (signed char)OPERAND1 + 2);
 	} else {
 		write_pc(aCPU, PC + 2);
@@ -1275,14 +1317,19 @@ static uint8_t djnz_rx_offset(struct em8051 *aCPU) {
 
 static uint8_t mov_a_rx(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	write_SFR(aCPU, REG_ACC, read_mem(aCPU, rx));
+	uint8_t rx_val = read_mem(aCPU, rx);
+	rx_trace_access(rx, rx_val, false);
+
+	write_SFR(aCPU, REG_ACC, rx_val);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
 
 static uint8_t mov_rx_a(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
-	write_mem(aCPU, rx, ACC);
+	uint8_t acc = ACC;
+	rx_trace_access(rx, acc, true);
+	write_mem(aCPU, rx, acc);
 	write_pc(aCPU, PC + 1);
 	return 0;
 }
