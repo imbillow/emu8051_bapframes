@@ -1304,8 +1304,10 @@ static uint8_t djnz_rx_offset(struct em8051 *aCPU) {
 	uint8_t rx = RX_ADDRESS;
 	uint8_t rx_val = read_mem(aCPU, rx);
 	rx_trace_access(rx, rx_val, false);
-	rx_trace_access(rx, rx_val - 1, true);
-	write_mem(aCPU, rx, rx_val - 1);
+
+	rx_val--;
+	write_mem(aCPU, rx, rx_val);
+	rx_trace_access(rx, rx_val, true);
 
 	if (rx_val) {
 		write_pc(aCPU, PC + (signed char)OPERAND1 + 2);
