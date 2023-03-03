@@ -842,6 +842,7 @@ static uint8_t mul_ab(struct em8051 *aCPU) {
 
 	write_SFR(aCPU, REG_ACC, acc);
 	write_SFR(aCPU, REG_B, b);
+	write_SFR(aCPU, REG_PSW, psw);
 	write_pc(aCPU, PC + 1);
 	return 3;
 }
