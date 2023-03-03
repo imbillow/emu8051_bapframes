@@ -1,6 +1,11 @@
 emu8051
 =======
 
+This is a modified version of the 8051 emulator that can emit traces in the bap-frames format, 
+primarily to be used in combination with rz-tracetest for testing 8051 lifting.
+
+---
+
 8051/8052 emulator with curses-based UI
 
 Binaries and info: http://iki.fi/sol/8051.html
